@@ -86,11 +86,16 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
     },
     createFile: async ({ label, path }) => {
       const extension = extname(label);
-      const name = await vscode.window.showInputBox({
+
+      // Augment Label      // TODO: Add prefix as config option
+      let name = await vscode.window.showInputBox({
         placeHolder: 'Filename',
         prompt: `Enter a filename for template ${label}`,
         value: basename(label, extension),
       });
+
+      name = `${(new Date).toISOString().replace(/T.+/, '').replace(/-/g, '')} - ${name}`;
+
       if (name) {
         const template = await templatesManager.get(label);
         const dir = (await isDir(path)) ? path : dirname(path);
