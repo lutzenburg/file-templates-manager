@@ -99,6 +99,7 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
 
         const isExists = await exists(filename);
         if (!isExists || (await confirm(`Replace existing file "${filename}"?`))) {
+          let date = new Date();
           const params = Object.assign(
             {
               DIR: dir,
@@ -107,10 +108,8 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
               FILE_PATH: filename,
               USER: os.userInfo().username,
               NAME: name,
-              DATE: new Date()
-                .toISOString()
-                .replace('T', ' ')
-                .replace(/\.\w+/, ''),
+              ID: `${date.toISOString().replace(/T.+/, '').replace(/-/g, '').replace(/ /g, '').replace(/:/g, '')} ${date.toTimeString().replace(/GMT.+/, '').trim()}`,
+              DATE: `${date.toISOString().replace(/T.+/, '')} ${date.toTimeString().replace(/GMT.+/, '').trim()}`
             },
             templatesManager.config.customVars,
           );
