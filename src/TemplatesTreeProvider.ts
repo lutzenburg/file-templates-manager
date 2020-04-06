@@ -2,7 +2,7 @@ import vscode, { TreeDataProvider, Event, ProviderResult, Uri } from 'vscode';
 import os from 'os';
 import { join, dirname, basename, extname } from 'path';
 import { TemplatesManager, Template } from './TemplatesManager';
-import { writeFile, exists, isDir, compile } from './utils';
+import { writeFile, exists, isDir, compile, readDir } from './utils';
 
 async function openFile(filename: string) {
   const uri = vscode.Uri.file(filename);
@@ -41,6 +41,7 @@ export interface Interactive {
 
 export interface TemplatesTreeProvider<T> extends TreeDataProvider<T> {
   showDialog(uri: Uri): Promise<void>;
+  createIndex(template: Template): Promise<string | void>;
   createFile(template: Template): Promise<string | void>;
   create(): Promise<void>;
   clone(item: Template): Promise<void>;
@@ -70,6 +71,12 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
           label: 'Create...',
           description: 'Create new template',
           command: 'templates.create',
+        },
+        {
+          label: 'index',
+          description: 'Create new index',
+          path: uri ? uri.fsPath : templatesManager.workspacePath,
+          command: 'templates.createIndex',
         },
         ...templatesManager.templates.map(({ name }) => ({
           label: name,
@@ -113,7 +120,7 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
               FILE_PATH: filename,
               USER: os.userInfo().username,
               NAME: name,
-              ID: `${date.toISOString().replace(/T.+/, '').replace(/-/g, '').replace(/ /g, '').replace(/:/g, '')} ${date.toTimeString().replace(/GMT.+/, '').trim()}`,
+              ID: `${date.toISOString().replace(/T.+/, '').replace(/-/g, '').replace(/ /g, '')}${date.toTimeString().replace(/GMT.+/, '').replace(/:/g, '').trim()}`,
               DATE: `${date.toISOString().replace(/T.+/, '')} ${date.toTimeString().replace(/GMT.+/, '').trim()}`
             },
             templatesManager.config.customVars,
@@ -175,6 +182,30 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
           await writeFile(filename, compiled(params));
           return openFile(filename);
         }
+      }
+    },
+    createIndex: async({ label, path }) => {
+      const name = "index.md";
+      const dir = (await isDir(path)) ? path : dirname(path);
+      const dirName = basename(dir);
+      const filename = join(dir, name);
+
+      // Scan all files in the directory
+      const files: string[] = await readDir(path);
+      const mappedFiled = files.filter(file => extname(file) == '.md' && file !== 'index.md').map(file => {
+        return `- [${file.toString()}](${encodeURI(path)}/${encodeURI(file.toString())})`;
+      });
+
+      const isExists = await exists(filename);
+      if (!isExists || (await confirm(`Replace existing file "${filename}"?`))) {
+        await writeFile(filename, `---
+title: ${dirName} - Index
+keywords: [index]
+---
+
+# Contents
+${mappedFiled.join("\n")}`);
+        return openFile(filename);
       }
     },
     create: async () => {

@@ -23,6 +23,7 @@ export async function activate({ extensionPath, globalStoragePath }: ExtensionCo
 
   vscode.commands.registerCommand('templates.showDialog', log(templatesTreeProvider.showDialog));
   vscode.commands.registerCommand('templates.createFile', log(templatesTreeProvider.createFile));
+  vscode.commands.registerCommand('templates.createIndex', log(templatesTreeProvider.createIndex));
   vscode.commands.registerCommand('templates.create', log(templatesTreeProvider.create));
   vscode.commands.registerCommand('templates.clone', log(templatesTreeProvider.clone));
   vscode.commands.registerCommand('templates.rename', log(templatesTreeProvider.rename));
