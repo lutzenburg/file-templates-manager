@@ -1,5 +1,6 @@
 import vscode, { TreeDataProvider, Event, ProviderResult, Uri } from 'vscode';
 import os from 'os';
+import fs, { Stats } from 'fs';
 import { join, dirname, basename, extname } from 'path';
 import { TemplatesManager, Template } from './TemplatesManager';
 import { writeFile, exists, isDir, compile, readDir } from './utils';
@@ -49,6 +50,39 @@ export interface TemplatesTreeProvider<T> extends TreeDataProvider<T> {
   rename(item: Template): Promise<void>;
   delete(item: Template): Promise<void>;
   refresh(): Promise<void>;
+}
+
+export function dIndicator(depth = 0) {
+  let count = '';
+  for (let i = 0; i < depth; ++i) {
+    count += '**'
+  }
+
+  return count;
+}
+
+export function dIndent(depth = 0) {
+  let count = '';
+  // for (let i = 0; i < depth; ++i) {
+  //   count += ''
+  // }
+
+  return count;
+}
+
+export function buildContentsTree(path: string, depth = 0): string[] {
+  return fs.readdirSync(path).filter(file => extname(file) !== '.html' && file !== 'index.md')
+    .map(file => {
+      if (fs.lstatSync(join(path, file)).isDirectory()) {
+        ++depth;
+        let data = `\n${dIndicator(depth)}[${file.toString()}](${encodeURI(join(path, file))}/index.md)${dIndicator(depth)}\n`;
+        // FIXME: bad typing
+        const newTree: any = buildContentsTree(join(path, file));
+        return data + newTree.join(`\n${dIndent(depth)}`)
+      } else {
+        return `${dIndent(depth)}- [${file.toString()}${(extname(file) !== '.md' ? ' (attachment)' : '')}](${encodeURI(join(path, file))})`;
+      }
+    });
 }
 
 export default async function createTemplatesTreeProvider(templatesManager: TemplatesManager<Template>): Promise<TemplatesTreeProvider<Template>> {
@@ -184,18 +218,14 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
         }
       }
     },
-    createIndex: async({ label, path }) => {
+    createIndex: async ({ label, path }) => {
       const name = "index.md";
       const dir = (await isDir(path)) ? path : dirname(path);
       const dirName = basename(dir);
       const filename = join(dir, name);
 
       // Scan all files in the directory
-      const files: string[] = await readDir(path);
-      const mappedFiled = files.filter(file => extname(file) !== '.html' && file !== 'index.md').map(file => {
-        return `- [${file.toString()}${(extname(file) !== '.md'? ' (attachment)' : '')}](${encodeURI(path)}/${encodeURI(file.toString())})`;
-      });
-
+      let mappedFiled = await buildContentsTree(path);
       const isExists = await exists(filename);
       if (!isExists || (await confirm(`Replace existing file "${filename}"?`))) {
         await writeFile(filename, `---
