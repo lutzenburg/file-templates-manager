@@ -192,8 +192,8 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
 
       // Scan all files in the directory
       const files: string[] = await readDir(path);
-      const mappedFiled = files.filter(file => extname(file) == '.md' && file !== 'index.md').map(file => {
-        return `- [${file.toString()}](${encodeURI(path)}/${encodeURI(file.toString())})`;
+      const mappedFiled = files.filter(file => extname(file) !== '.html' && file !== 'index.md').map(file => {
+        return `- [${file.toString()}${(extname(file) !== '.md'? ' (attachment)' : '')}](${encodeURI(path)}/${encodeURI(file.toString())})`;
       });
 
       const isExists = await exists(filename);
