@@ -52,37 +52,82 @@ export interface TemplatesTreeProvider<T> extends TreeDataProvider<T> {
   refresh(): Promise<void>;
 }
 
-export function dIndicator(depth = 0) {
-  let count = '';
-  for (let i = 0; i < depth; ++i) {
-    count += '**'
-  }
-
-  return count;
+export enum DocumentType {
+  Markdown,
+  Attachment,
+  Directory,
+  Unknown
+}
+export interface Document {
+  name: string;
+  path: string;
+  type: DocumentType;
+  children?: Document[];
 }
 
-export function dIndent(depth = 0) {
-  let count = '';
-  // for (let i = 0; i < depth; ++i) {
-  //   count += ''
-  // }
+// TODO: Relative nav 
+export function buildContentsTree(path: string, depth = 0): Document[] {
+  const documents: Document[] = [];
 
-  return count;
-}
-
-export function buildContentsTree(path: string, depth = 0): string[] {
-  return fs.readdirSync(path).filter(file => extname(file) !== '.html' && file !== 'index.md')
+  fs.readdirSync(path).filter(file => extname(file) !== '.html' && file !== 'index.md')
     .map(file => {
+      let type = DocumentType.Unknown;
       if (fs.lstatSync(join(path, file)).isDirectory()) {
-        ++depth;
-        let data = `\n${dIndicator(depth)}[${file.toString()}](${encodeURI(join(path, file))}/index.md)${dIndicator(depth)}\n`;
-        // FIXME: bad typing
-        const newTree: any = buildContentsTree(join(path, file));
-        return data + newTree.join(`\n${dIndent(depth)}`)
+        let newDoc: Document = {
+          name: file.toString(),
+          path: encodeURI(join(path, file)),
+          type: DocumentType.Directory,
+          children: buildContentsTree(join(path, file))
+        }
+        documents.push(newDoc);
       } else {
-        return `${dIndent(depth)}- [${file.toString()}${(extname(file) !== '.md' ? ' (attachment)' : '')}](${encodeURI(join(path, file))})`;
+        documents.push({
+          name: file.toString(),
+          path: encodeURI(join(path, file)),
+          type: (extname(file) !== '.md' ? DocumentType.Attachment : DocumentType.Markdown)
+        });
       }
     });
+  return documents;
+}
+
+export function transformContentsTreeToContents(docs: Document[], depth = 0): string {
+  let output = '';
+  docs.forEach(doc => {
+    if (doc.type === DocumentType.Directory) {
+      output += `${addTabs(depth - 1)}${transformContentsNode(doc)}\n\n`;
+      output += transformContentsTreeToContents(doc.children, ++depth);
+    } else {
+      output += `${addTabs(depth - 1)}- ${transformContentsNode(doc)}\n`;
+    }
+  })
+  return output;
+}
+
+export function addTabs(count: number): string {
+  let output = '';
+  for (let index = 0; index < count; index++) {
+    output += '\t';
+  }
+  return output;
+}
+
+/**
+ * Turns a node into a markdown link
+ * @param doc
+ */
+export function transformContentsNode(doc: Document): string {
+  switch (doc.type) {
+    case DocumentType.Attachment:
+      return `[${doc.name} (Attachment)](${doc.path})`
+    case DocumentType.Markdown:
+      return `[${doc.name}](${doc.path})`
+    case DocumentType.Directory:
+      return `**[${doc.name}](${doc.path}/index.md)**`
+    case DocumentType.Unknown:
+    default:
+      return '';
+  }
 }
 
 export default async function createTemplatesTreeProvider(templatesManager: TemplatesManager<Template>): Promise<TemplatesTreeProvider<Template>> {
@@ -225,7 +270,8 @@ export default async function createTemplatesTreeProvider(templatesManager: Temp
       const filename = join(dir, name);
 
       // Scan all files in the directory
-      let mappedFiled = await buildContentsTree(path);
+      const documents = await buildContentsTree(path);
+      const contents = transformContentsTreeToContents(documents);
       const isExists = await exists(filename);
       if (!isExists || (await confirm(`Replace existing file "${filename}"?`))) {
         await writeFile(filename, `---
@@ -234,7 +280,8 @@ keywords: [index]
 ---
 
 # Contents
-${mappedFiled.join("\n")}`);
+
+${contents}`);
         return openFile(filename);
       }
     },
